@@ -87,7 +87,11 @@ def after_start(description, image, aspects, use_llm, prompt, negative, prompt_f
     return prepare_plan(description, image, aspects, use_llm, prompt, negative, prompt_for, progress)
 
 
-def run_plan(plan, prompt, negative, image, progress=gr.Progress()):
+def run_plan(plan, prompt, negative, image, description, aspects, progress=gr.Progress()):
+    if not plan or ("settings" not in plan and not plan.get("problems")):
+        # the plan lives on the server: after a Forge restart the page still shows it, the server doesn't
+        chosen = (aspects or []) if image is not None else []
+        plan = plan_lib.build(description, prompt, negative, chosen, image.size if image is not None else None)
     plan = dict(plan, prompt=prompt, negative_prompt=negative)
     try:
         images, infotext, seed = executor.generate(plan, image, progress)
@@ -231,9 +235,9 @@ def on_ui_tabs():
         back3.click(lambda img: _steps(2 if img is not None else 1), [reference], steps)
 
         run_outputs = [plan_state, gallery, infotext, result_md, plan_md, go_btn, *steps]
-        go_btn.click(run_plan, [plan_state, prompt_tb, negative_tb, reference], run_outputs)
-        again_btn.click(lambda p: dict(p, seed=-1), [plan_state], [plan_state]).then(
-            run_plan, [plan_state, prompt_tb, negative_tb, reference], run_outputs)
+        run_inputs = [plan_state, prompt_tb, negative_tb, reference, description, aspects]
+        go_btn.click(run_plan, run_inputs, run_outputs)
+        again_btn.click(lambda p: dict(p or {}, seed=-1), [plan_state], [plan_state]).then(run_plan, run_inputs, run_outputs)
         edit_btn.click(lambda: _steps(3), None, steps)
         new_btn.click(lambda: [*_steps(1), "", None, [], "", "", "", {}],
                       None, [*steps, description, reference, aspects, prompt_tb, negative_tb, prompt_for, plan_state])

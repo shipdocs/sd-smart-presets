@@ -184,6 +184,8 @@ def describe(plan: dict) -> tuple[str, list]:
     """Markdown summary of the plan, plus the files that still have to be downloaded."""
     if plan.get("problems"):
         return "### ⚠️ Dit kan nog niet\n" + "\n".join(f"- {p}" for p in plan["problems"]), []
+    if "settings" not in plan:
+        return "Geen plan: ga terug naar stap 1.", []
 
     s = plan["settings"]
     arch = catalog.ARCH_LABELS.get(plan["arch"], plan["arch"])
