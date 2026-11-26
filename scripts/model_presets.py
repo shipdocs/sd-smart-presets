@@ -114,9 +114,12 @@ def detect_preset(info) -> str | None:
     elif has("double_blocks"):
         preset = "klein" if ("klein" in name or "flux2" in name or "flux-2" in name) else "flux"
 
-    if preset not in available_presets():
+    available = available_presets()
+    if preset not in available:
         preset = None  # e.g. flux3 without the FLUX 3 extension
-    _arch_cache[key] = preset
+    if available:
+        # before Neo's UI exists the preset list is empty: don't remember "unknown" for good
+        _arch_cache[key] = preset
     return preset
 
 

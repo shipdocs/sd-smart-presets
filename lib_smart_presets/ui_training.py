@@ -71,16 +71,29 @@ def refresh(last_key=""):
             gr.update(visible=active), key)
 
 
-def on_upload(files):
-    paths = [f if isinstance(f, str) else f.name for f in (files or [])]
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
+def _paths(files, folder=None) -> list[str]:
+    """Dropped photos plus the images of a chosen folder (other files in it are skipped)."""
+    out = []
+    for f in list(files or []) + list(folder or []):
+        p = f if isinstance(f, str) else f.name
+        if Path(p).suffix.lower() in IMAGE_EXT and p not in out:
+            out.append(p)
+    return out
+
+
+def on_upload(files, folder):
+    paths = _paths(files, folder)
     if not paths:
         return gr.update(), "", gr.update()
     kind, why = training.guess_kind(paths)
     return gr.update(value=kind), f"🔍 {len(paths)} foto's. {why}", gr.update(visible=(kind == "person"))
 
 
-def on_plan(files, name, kind, checkpoint):
-    paths = [f if isinstance(f, str) else f.name for f in (files or [])]
+def on_plan(files, folder, name, kind, checkpoint):
+    paths = _paths(files, folder)
     problems = []
     if len(paths) < 5:
         problems.append("Geef minstens 5 foto's (beter 15 tot 30, verschillende kanten, kleding en licht).")
@@ -108,8 +121,8 @@ def on_plan(files, name, kind, checkpoint):
     return text, gr.update(interactive=True)
 
 
-def on_start(files, name, kind, checkpoint, consent):
-    paths = [f if isinstance(f, str) else f.name for f in (files or [])]
+def on_start(files, folder, name, kind, checkpoint, consent):
+    paths = _paths(files, folder)
     try:
         training.start(paths, name, kind, checkpoint, consent)
     except Exception as e:
@@ -133,8 +146,11 @@ def build():
     with gr.Column(visible=True) as setup:
         gr.Markdown("### 1 · Foto's")
         with gr.Row():
-            files = gr.File(label="Sleep hier 10 tot 40 foto's", file_count="multiple", file_types=["image"],
-                            type="filepath", scale=3)
+            with gr.Column(scale=3):
+                files = gr.File(label="Sleep hier 10 tot 40 foto's", file_count="multiple", file_types=["image"],
+                                type="filepath")
+                folder = gr.File(label="… of kies een map (alleen de afbeeldingen erin worden gebruikt)",
+                                 file_count="directory", type="filepath")
             with gr.Column(scale=2):
                 name = gr.Textbox(label="Naam", placeholder="Bijv. Anna, of Oma's theepot")
                 kind = gr.Radio(choices=[(v, k) for k, v in training.KINDS.items()], value="person", label="Wat is het?")
@@ -162,13 +178,14 @@ def build():
     timer = gr.Timer(3.0)
     last_key = gr.State("")
 
-    plan_inputs = [files, name, kind, checkpoint]
-    files.upload(on_upload, [files], [kind, kind_md, consent]).then(on_plan, plan_inputs, [plan_md, start_btn])
+    plan_inputs = [files, folder, name, kind, checkpoint]
+    for src in (files, folder):
+        src.upload(on_upload, [files, folder], [kind, kind_md, consent]).then(on_plan, plan_inputs, [plan_md, start_btn])
+        src.clear(on_plan, plan_inputs, [plan_md, start_btn])
     for c in (name, kind, checkpoint):
         c.change(on_plan, plan_inputs, [plan_md, start_btn], show_progress=False)
-    files.clear(lambda: ("", "Voeg foto's toe en geef een naam.", gr.update(interactive=False)), None, [kind_md, plan_md, start_btn])
     kind.change(lambda k: gr.update(visible=(k == "person")), [kind], [consent], show_progress=False)
-    start_btn.click(on_start, [files, name, kind, checkpoint, consent], [setup, progress_col])
+    start_btn.click(on_start, [files, folder, name, kind, checkpoint, consent], [setup, progress_col])
 
     view = [status_md, bar, log, samples, version, cancel_btn, last_key]
     timer.tick(refresh, [last_key], view, show_progress=False)
