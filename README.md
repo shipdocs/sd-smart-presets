@@ -47,8 +47,11 @@ Drop 10 to 40 photos (or pick a folder) and give it a name. Everything else is a
 2. **Check the photos.** Blurry photos and duplicates are dropped. For a person, photos of
    someone else are dropped too: the face most photos share wins (InsightFace embeddings).
    Gender is detected to pick the class word (`man` / `woman`). Then each photo is cropped
-   to head and shoulders and made square. Crops that would have to be blown up more than 2x
-   are dropped while at least 10 photos remain, because the model learns the blur (eyes go first).
+   to head and shoulders and made square. Crops smaller than the training size are enlarged with
+   **4x-UltraSharp** when it's in `models/ESRGAN` (in a test against R-ESRGAN 4x+ and the FaceUp DAT
+   models it gave the sharpest eyes without changing the face); plain resizing is blurry and the
+   model learns the blur. Crops too small even for that (under ~180 px, or under 256 px without the
+   upscaler) are dropped while at least 10 photos remain.
    The plan warns when photos are small (short side under 768 px for SD 1.5) and when the base
    model is a few-step model (Hyper, Lightning, Turbo, LCM, DMD): those train poorly, so normal
    checkpoints are listed first.

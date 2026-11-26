@@ -97,6 +97,18 @@ def training_checkpoints() -> list[str]:
     return sorted(names, key=is_distilled)  # stable: keeps the order above within each group
 
 
+def find_upscaler() -> str | None:
+    """ESRGAN model for enlarging small photos: 4x-UltraSharp gave the sharpest eyes without
+    changing the face (tested against R-ESRGAN 4x+ and the FaceUp DAT models)."""
+    from modules import paths
+    folder = Path(paths.models_path) / "ESRGAN"
+    found = sorted(p for p in folder.glob("*") if p.suffix in (".pth", ".safetensors")) if folder.exists() else []
+    for p in found:
+        if "ultrasharp" in p.name.lower():
+            return str(p)
+    return None
+
+
 def photo_sizes(image_paths: list[str], arch: str) -> dict:
     """How many photos are too small to give a sharp face at the training resolution.
     Only reads the image headers."""
@@ -182,6 +194,7 @@ def start(image_paths: list[str], name: str, kind: str, checkpoint: str, consent
             "images": images,
             "lora_dir": downloads.folder_paths("Lora")[0],
             "insightface_root": os.path.join(paths.models_path, "insightface"),
+            "upscaler_path": find_upscaler(),
             # test images like the model is normally used, but never fewer than 12 steps
             "eval_steps": max(12, min(30, int(model_settings.get("steps", 25)))),
             "eval_cfg": float(model_settings.get("cfg_scale", 6.0)),

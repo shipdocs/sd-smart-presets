@@ -66,6 +66,36 @@ def _sharpness(img: Image.Image) -> float:
     return float(cv2.Laplacian(np.asarray(small), cv2.CV_64F).var())
 
 
+def _load_upscaler():
+    """The ESRGAN model Forge has (4x-UltraSharp by default), or None: then plain resizing."""
+    path = CFG.get("upscaler_path")
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        import torch
+        from spandrel import ModelLoader
+        model = ModelLoader().load_from_file(path).cuda().eval()
+        try:
+            model = model.half()
+        except Exception:
+            pass  # some architectures only run in fp32
+        return model
+    except Exception as e:
+        status(log=f"upscaler niet geladen ({e}); gewoon vergroten")
+        return None
+
+
+def _upscale(model, img: Image.Image) -> Image.Image:
+    import torch
+    t = torch.from_numpy(np.array(img)).permute(2, 0, 1)[None].float().div(255).cuda()
+    if next(model.model.parameters()).dtype == torch.float16:
+        t = t.half()
+    with torch.no_grad():
+        out = model(t)
+    arr = (out[0].float().clamp(0, 1).permute(1, 2, 0).cpu().numpy() * 255).round().astype("uint8")
+    return Image.fromarray(arr)
+
+
 def _square_crop(img: Image.Image, cx: float, cy: float, side: float) -> Image.Image:
     w, h = img.size
     side = min(side, w, h)
@@ -149,27 +179,40 @@ def prepare() -> list[Path]:
             it["crop"] = _square_crop(img, img.size[0] / 2, img.size[1] / 2, s)
         it["px"] = min(it["crop"].size)
 
-    # A crop blown up more than 2x is blurry, and the model learns that blur (eyes and teeth
-    # go first). Drop those, but only while enough photos remain; keep the sharpest-sized ones.
+    # Crops smaller than the training size are enlarged. With an ESRGAN upscaler (4x-UltraSharp)
+    # that stays sharp; plain resizing is blurry and the model learns the blur (eyes go first).
+    # Crops too small even for the upscaler are dropped, but only while enough photos remain.
+    upscaler = _load_upscaler()
+    limit = res * (0.35 if upscaler else 0.5)
     min_keep = max(CFG.get("min_images", 5), 10)
-    small = sorted((it for it in items if it["px"] < res * 0.5), key=lambda it: it["px"])
-    for it in small:
+    for it in sorted((it for it in items if it["px"] < limit), key=lambda it: it["px"]):
         if len(items) <= min_keep:
             break
         items.remove(it)
         dropped["te klein"] += 1
-    upscaled = sum(1 for it in items if it["px"] < res * 0.8)
 
+    upscaled = 0
     paths = []
     for n, it in enumerate(items):
-        crop = it["crop"].resize((res, res), Image.LANCZOS)
+        crop = it["crop"]
+        if it["px"] < res:
+            upscaled += 1
+            if upscaler:
+                status("prepare", 0.9 + n / max(1, len(items)) * 0.1, f"Kleine foto's scherp vergroten ({upscaled})")
+                crop = _upscale(upscaler, crop)
+        crop = crop.resize((res, res), Image.LANCZOS)
         p = out_dir / f"{n:03d}.png"
         crop.save(p)
         paths.append(p)
+    if upscaler:
+        del upscaler
+        import torch
+        torch.cuda.empty_cache()
 
     caption = f"{CFG['token']} style" if kind == "style" else f"photo of {CFG['token']} {class_word}".strip()
     summary = {"used": len(paths), "dropped": {k: v for k, v in dropped.items() if v}, "class_word": class_word,
-               "caption": caption, "upscaled": upscaled}
+               "caption": caption, "upscaled": upscaled,
+               "upscaler": Path(CFG["upscaler_path"]).stem if upscaled and CFG.get("upscaler_path") else None}
     status("prepare", 1.0, f"{len(paths)} foto's bruikbaar", log=f"dataset: {summary}", dataset=summary)
     if len(paths) < CFG.get("min_images", 5):
         raise RuntimeError(f"Te weinig bruikbare foto's ({len(paths)}); er zijn er minstens {CFG.get('min_images', 5)} nodig. "

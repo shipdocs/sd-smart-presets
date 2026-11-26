@@ -40,7 +40,8 @@ def _status_view(st: dict):
         dropped = ", ".join(f"{v} {k}" for k, v in ds.get("dropped", {}).items()) or "geen"
         lines.append(f"**Foto's:** {ds['used']} gebruikt · afgevallen: {dropped} · trigger: `{ds['caption']}`")
         if ds.get("upscaled"):
-            lines.append(f"⚠️ {ds['upscaled']} foto's moesten vergroot worden; grotere foto's geven scherpere ogen.")
+            how = f"met {ds['upscaler']}" if ds.get("upscaler") else "gewoon (geen upscaler gevonden)"
+            lines.append(f"ℹ️ {ds['upscaled']} foto's vergroot {how}; echte grotere foto's geven de scherpste ogen.")
     if stage == "done":
         res = st.get("result", {})
         ev = st.get("evaluation", {})
@@ -119,10 +120,13 @@ def on_plan(files, folder, name, kind, checkpoint):
                         "op dit model." if normal else ""))
     sizes = training.photo_sizes(paths, arch)
     if kind in ("person", "character") and sizes["small"]:
-        warnings.append(f"⚠️ **{sizes['small']} van de {sizes['total']} foto's zijn klein** (korte kant onder "
-                        f"{int(s['resolution'] * 1.5)} px). Het gezicht wordt uitgesneden en vergroot, en dan leert het "
-                        f"model wazige ogen. Foto's van {sizes['advised']} px of groter werken veel beter; "
-                        "sterk vergrote uitsneden vallen automatisch af.")
+        up = training.find_upscaler()
+        how = (f"Ze worden automatisch scherp vergroot met **{Path(up).stem}**; alleen piepkleine vallen af. "
+               if up else "Ze worden gewoon vergroot (wazig): zet **4x-UltraSharp** in `models/ESRGAN` voor scherpe "
+                          "vergrotingen; sterk vergrote vallen af. ")
+        warnings.append(f"ℹ️ **{sizes['small']} van de {sizes['total']} foto's zijn klein** (korte kant onder "
+                        f"{int(s['resolution'] * 1.5)} px). " + how +
+                        f"Echte foto's van {sizes['advised']} px of groter blijven het best.")
     text = "\n\n".join(warnings + [
         f"**Wat:** {training.KINDS[kind]} · **naam/trigger:** `{training.token_for(name)}`",
         f"**Basismodel:** {checkpoint} ({label}) · trainen op {s['resolution']}×{s['resolution']}",
