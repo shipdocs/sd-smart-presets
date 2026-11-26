@@ -1,0 +1,6 @@
+__pycache__/
+# your own data: per-model settings, saved presets and their reference photos
+model_presets.json
+user_presets/
+# personal patch for another extension, not part of this one
+civitai-browser-plus.patch
