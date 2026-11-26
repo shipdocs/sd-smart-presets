@@ -92,8 +92,10 @@ def run_plan(plan, prompt, negative, image, progress=gr.Progress()):
     try:
         images, infotext, seed = executor.generate(plan, image, progress)
     except Exception as e:
-        gr.Warning(str(e))
-        print(f"[Smart Presets] mislukt: {e}")
+        import traceback
+        traceback.print_exc()
+        gr.Warning(str(e) or type(e).__name__)
+        print(f"[Smart Presets] mislukt: {e!r}")
         text, go = _show_plan(plan)
         return [plan, gr.update(), "", f"⚠️ {e}", text, go, *_steps(3)]
     plan["last_seed"] = seed

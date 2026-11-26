@@ -48,7 +48,7 @@ def ensure_files(plan: dict, progress=None):
     missing = downloads.missing(plan_lib.model_files(plan))
     for i, f in enumerate(missing):
         def cb(frac, text, i=i):
-            if progress:
+            if progress is not None:
                 progress((i + frac) / len(missing), desc=f"Downloaden ({i + 1}/{len(missing)}) {text}")
         downloads.download(f, cb)
     if missing:
@@ -98,7 +98,7 @@ def generate(plan: dict, image, progress=None):
         prompt += f" <lora:{lora['name']}:{lora['weight']}>"
 
     s = plan["settings"]
-    if progress:
+    if progress is not None:
         progress(0, desc="Afbeelding maken ...")
     with queue_lock:
         with closing(StableDiffusionProcessingTxt2Img(
