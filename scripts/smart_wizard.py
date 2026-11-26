@@ -18,7 +18,7 @@ EXT_DIR = Path(__file__).resolve().parents[1]
 if str(EXT_DIR) not in sys.path:
     sys.path.insert(0, str(EXT_DIR))
 
-from lib_smart_presets import analyze, catalog, downloads, executor, prompting, store  # noqa: E402
+from lib_smart_presets import analyze, catalog, downloads, executor, prompting, store, ui_training  # noqa: E402
 from lib_smart_presets import plan as plan_lib  # noqa: E402
 
 from modules import infotext_utils, script_callbacks  # noqa: E402
@@ -159,68 +159,73 @@ def on_ui_tabs():
 
         gr.Markdown("## 🧙 Smart Presets\nZeg wat je wilt maken; de wizard regelt model-instellingen, ControlNet en downloads.")
 
-        # 1 ------------------------------------------------------------
-        with gr.Column(visible=True) as step1:
-            gr.Markdown("### 1 · Wat wil je maken?")
-            with gr.Row():
-                with gr.Column(scale=3):
-                    description = gr.Textbox(
-                        label="Beschrijving (Nederlands mag)", lines=4,
-                        placeholder="Bijv.: een vrouw die op een terras koffie drinkt, avondzon")
-                    use_llm = gr.Checkbox(value=llm, visible=llm,
-                                          label="Prompt laten schrijven door het lokale taalmodel")
-                    if not llm:
-                        gr.Markdown("<small>Geen lokaal taalmodel gevonden (Prompt Refiner + Qwen): je tekst wordt "
-                                    "letterlijk als prompt gebruikt, dus schrijf hem bij voorkeur in het Engels.</small>")
-                with gr.Column(scale=2):
-                    reference = gr.Image(type="pil", label="Voorbeeldfoto (mag leeg)", sources=["upload", "clipboard"], height=260)
-            with gr.Accordion("Of begin met een opgeslagen preset", open=False):
-                with gr.Row():
-                    preset_dd = gr.Dropdown(choices=store.names(), label="Preset", scale=3)
-                    load_btn = gr.Button("Laden", scale=1)
-                    export_btn = gr.Button("Exporteren", scale=1)
-                    delete_btn = gr.Button("🗑️ Verwijderen", scale=1)
-                with gr.Row():
-                    import_file = gr.File(label="Preset importeren (.json)", file_types=[".json"], type="filepath")
-                    export_file = gr.File(label="Export", visible=False, interactive=False)
-                preset_status = gr.Markdown("")
-            next1 = gr.Button("Volgende →", variant="primary")
+        with gr.Tabs():
+            with gr.Tab("🖼️ Maak een afbeelding"):
+                # 1 ------------------------------------------------------------
+                with gr.Column(visible=True) as step1:
+                    gr.Markdown("### 1 · Wat wil je maken?")
+                    with gr.Row():
+                        with gr.Column(scale=3):
+                            description = gr.Textbox(
+                                label="Beschrijving (Nederlands mag)", lines=4,
+                                placeholder="Bijv.: een vrouw die op een terras koffie drinkt, avondzon")
+                            use_llm = gr.Checkbox(value=llm, visible=llm,
+                                                  label="Prompt laten schrijven door het lokale taalmodel")
+                            if not llm:
+                                gr.Markdown("<small>Geen lokaal taalmodel gevonden (Prompt Refiner + Qwen): je tekst wordt "
+                                            "letterlijk als prompt gebruikt, dus schrijf hem bij voorkeur in het Engels.</small>")
+                        with gr.Column(scale=2):
+                            reference = gr.Image(type="pil", label="Voorbeeldfoto (mag leeg)", sources=["upload", "clipboard"], height=260)
+                    with gr.Accordion("Of begin met een opgeslagen preset", open=False):
+                        with gr.Row():
+                            preset_dd = gr.Dropdown(choices=store.names(), label="Preset", scale=3)
+                            load_btn = gr.Button("Laden", scale=1)
+                            export_btn = gr.Button("Exporteren", scale=1)
+                            delete_btn = gr.Button("🗑️ Verwijderen", scale=1)
+                        with gr.Row():
+                            import_file = gr.File(label="Preset importeren (.json)", file_types=[".json"], type="filepath")
+                            export_file = gr.File(label="Export", visible=False, interactive=False)
+                        preset_status = gr.Markdown("")
+                    next1 = gr.Button("Volgende →", variant="primary")
 
-        # 2 ------------------------------------------------------------
-        with gr.Column(visible=False) as step2:
-            gr.Markdown("### 2 · Wat wil je van de foto overnemen?")
-            analysis_md = gr.Markdown("")
-            aspects = gr.CheckboxGroup(choices=ASPECT_CHOICES, label="Overnemen", value=[])
-            with gr.Row():
-                back2 = gr.Button("← Terug")
-                next2 = gr.Button("Volgende →", variant="primary")
+                # 2 ------------------------------------------------------------
+                with gr.Column(visible=False) as step2:
+                    gr.Markdown("### 2 · Wat wil je van de foto overnemen?")
+                    analysis_md = gr.Markdown("")
+                    aspects = gr.CheckboxGroup(choices=ASPECT_CHOICES, label="Overnemen", value=[])
+                    with gr.Row():
+                        back2 = gr.Button("← Terug")
+                        next2 = gr.Button("Volgende →", variant="primary")
 
-        # 3 ------------------------------------------------------------
-        with gr.Column(visible=False) as step3:
-            gr.Markdown("### 3 · Het plan")
-            plan_md = gr.Markdown("")
-            with gr.Accordion("Prompt bekijken of aanpassen", open=False):
-                prompt_tb = gr.Textbox(label="Prompt", lines=3)
-                negative_tb = gr.Textbox(label="Negatieve prompt", lines=2)
-            with gr.Row():
-                back3 = gr.Button("← Terug")
-                go_btn = gr.Button("✨ Maak afbeelding", variant="primary")
+                # 3 ------------------------------------------------------------
+                with gr.Column(visible=False) as step3:
+                    gr.Markdown("### 3 · Het plan")
+                    plan_md = gr.Markdown("")
+                    with gr.Accordion("Prompt bekijken of aanpassen", open=False):
+                        prompt_tb = gr.Textbox(label="Prompt", lines=3)
+                        negative_tb = gr.Textbox(label="Negatieve prompt", lines=2)
+                    with gr.Row():
+                        back3 = gr.Button("← Terug")
+                        go_btn = gr.Button("✨ Maak afbeelding", variant="primary")
 
-        # 4 ------------------------------------------------------------
-        with gr.Column(visible=False) as step4:
-            gr.Markdown("### 4 · Resultaat")
-            gallery = gr.Gallery(label="Resultaat", columns=3, height=520, object_fit="contain")
-            result_md = gr.Markdown("")
-            infotext = gr.Textbox(visible=False)
-            with gr.Row():
-                again_btn = gr.Button("🎲 Nog een (andere seed)", variant="primary")
-                send_btn = gr.Button("Openen in txt2img", elem_id="smart_presets_to_txt2img")
-                edit_btn = gr.Button("← Plan aanpassen")
-                new_btn = gr.Button("Nieuwe opdracht")
-            with gr.Row():
-                preset_name = gr.Textbox(label="Bevalt het? Sla op als preset", placeholder="Naam, bijv. 'Anna op terras'", scale=3)
-                save_btn = gr.Button("👍 Opslaan", scale=1)
-            save_status = gr.Markdown("")
+                # 4 ------------------------------------------------------------
+                with gr.Column(visible=False) as step4:
+                    gr.Markdown("### 4 · Resultaat")
+                    gallery = gr.Gallery(label="Resultaat", columns=3, height=520, object_fit="contain")
+                    result_md = gr.Markdown("")
+                    infotext = gr.Textbox(visible=False)
+                    with gr.Row():
+                        again_btn = gr.Button("🎲 Nog een (andere seed)", variant="primary")
+                        send_btn = gr.Button("Openen in txt2img", elem_id="smart_presets_to_txt2img")
+                        edit_btn = gr.Button("← Plan aanpassen")
+                        new_btn = gr.Button("Nieuwe opdracht")
+                    with gr.Row():
+                        preset_name = gr.Textbox(label="Bevalt het? Sla op als preset", placeholder="Naam, bijv. 'Anna op terras'", scale=3)
+                        save_btn = gr.Button("👍 Opslaan", scale=1)
+                    save_status = gr.Markdown("")
+
+            with gr.Tab("🎓 Leer iets nieuws (LoRA-training)"):
+                training_load, training_load_outputs = ui_training.build()
 
         steps = [step1, step2, step3, step4]
 
@@ -255,6 +260,11 @@ def on_ui_tabs():
             paste_button=send_btn, tabname="txt2img", source_text_component=infotext))
         send_btn.click(fn=None, js="switch_to_txt2img")
 
+        def on_load():
+            return [gr.update(choices=store.names()), *training_load()]
+
+        tab.load(on_load, None, [preset_dd, *training_load_outputs])
+
     return [(tab, "Smart Presets", "smart_presets")]
 
 
@@ -266,6 +276,8 @@ script_callbacks.on_ui_tabs(on_ui_tabs)
 #   POST /smart-presets/plan      {"description", "prompt"?, "negative_prompt"?, "aspects"?, "image"?: base64, "use_llm"?}
 #   POST /smart-presets/generate  {"plan": {...}, "image"?: base64}  -> {"images": [base64], "info", "seed"}
 #   POST /smart-presets/analyze   {"image": base64}
+#   POST /smart-presets/train     {"images": [base64], "name", "kind"?, "checkpoint"?, "consent"}
+#   GET  /smart-presets/train/status
 
 def on_app_started(_demo, app):
     from modules import shared
@@ -307,6 +319,32 @@ def on_app_started(_demo, app):
         except Exception as e:
             raise HTTPException(400, str(e))
         return {"images": [encode_pil_to_base64(i) for i in images], "info": info, "seed": seed}
+
+
+    @app.post("/smart-presets/train")
+    def api_train(req: dict = Body(...)):
+        """{"images": [base64, ...], "name", "kind"?, "checkpoint"?, "consent": bool}"""
+        import tempfile
+        from lib_smart_presets import training
+        tmp = Path(tempfile.mkdtemp(prefix="smart_presets_"))
+        paths = []
+        for i, b64 in enumerate(req.get("images", [])):
+            p = tmp / f"{i:03d}.png"
+            img(b64).save(p)
+            paths.append(str(p))
+        kind = req.get("kind") or training.guess_kind(paths)[0]
+        checkpoint = req.get("checkpoint") or (training.training_checkpoints() or [None])[0]
+        try:
+            job = training.start(paths, req.get("name", "lora"), kind, checkpoint, bool(req.get("consent")))
+        except Exception as e:
+            raise HTTPException(400, str(e))
+        return {"job": job.name, "kind": kind, "checkpoint": checkpoint}
+
+    @app.get("/smart-presets/train/status")
+    def api_train_status():
+        from lib_smart_presets import training
+        job = training.latest_job()
+        return training.read_status(job) if job else {}
 
 
 script_callbacks.on_app_started(on_app_started)

@@ -38,6 +38,28 @@ A preset is a saved plan (JSON) in `user_presets/`, with the example photo next 
 **Export** writes a shareable copy *without* the photo. When you load or import a preset, the files to download
 always come from the built-in catalog, never from the preset file itself.
 
+## Wizard 2: train a LoRA (tab "Leer iets nieuws")
+
+Drop 10 to 40 photos and give it a name. Everything else is automatic:
+
+1. **Guess what it is.** If most photos have a face, it's a person; otherwise you choose
+   between object, character and style. For a real person you must confirm they gave consent.
+2. **Check the photos.** Blurry photos and duplicates are dropped. For a person, photos of
+   someone else are dropped too: the face most photos share wins (InsightFace embeddings).
+   Gender is detected to pick the class word (`man` / `woman`). Then each photo is cropped
+   to head and shoulders and made square.
+3. **Train** a LoRA on the UNet attention layers (diffusers + peft, rank 16, 8-bit AdamW, min-SNR).
+   The number of steps depends on the number of photos. Captions and latents are computed once,
+   so only the UNet stays on the GPU: SD 1.5 fits easily in 12 GB, SDXL fits with gradient checkpointing.
+4. **Pick the best version.** Four versions are saved and each makes four test images.
+   For a person, the version whose faces look most like your photos wins.
+   For other kinds it's the version at about 80% of the training. You can install another version with one click.
+5. **Install it.** The LoRA goes into `models/Lora`, with a preview, its trigger words and the
+   base model in the `.json`. A preset is also added to Wizard 1.
+
+The training runs as a separate process. While it runs, Forge holds its generation queue
+(image requests wait), and afterwards the VRAM is completely free again. Progress survives a page reload.
+
 ## Per-model settings (accordion "Model Presets" in txt2img/img2img)
 
 When you switch checkpoints:
@@ -60,8 +82,7 @@ Settings → Model Presets turns this on or off.
 ## Roadmap
 
 - Pick the checkpoint automatically from what you describe.
-- Wizard 2: train a LoRA of a person, character or style automatically, then pick the best
-  epoch by face similarity and register it as a preset.
+- Training: start it at night (agent scheduler), or caption with WD14 tags for styles.
 
 ## License
 

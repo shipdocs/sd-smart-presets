@@ -4,3 +4,4 @@ model_presets.json
 user_presets/
 # personal patch for another extension, not part of this one
 civitai-browser-plus.patch
+training_jobs/
