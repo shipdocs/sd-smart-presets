@@ -39,6 +39,8 @@ def _status_view(st: dict):
     if ds:
         dropped = ", ".join(f"{v} {k}" for k, v in ds.get("dropped", {}).items()) or "geen"
         lines.append(f"**Foto's:** {ds['used']} gebruikt · afgevallen: {dropped} · trigger: `{ds['caption']}`")
+        if ds.get("upscaled"):
+            lines.append(f"⚠️ {ds['upscaled']} foto's moesten vergroot worden; grotere foto's geven scherpere ogen.")
     if stage == "done":
         res = st.get("result", {})
         ev = st.get("evaluation", {})
@@ -109,7 +111,19 @@ def on_plan(files, folder, name, kind, checkpoint):
     s = training.auto_settings(arch, kind, len(paths))
     minutes = training.estimate_minutes(arch, s["steps"])
     label = "SDXL" if arch == "xl" else "SD 1.5"
-    text = "\n\n".join([
+    warnings = []
+    if training.is_distilled(checkpoint):
+        normal = [c for c in training.training_checkpoints() if not training.is_distilled(c)]
+        warnings.append("⚠️ **Dit is een snel (gedestilleerd) model** (Hyper/Lightning/Turbo/LCM). Daarop trainen "
+                        "geeft vaak misvormde ogen en vlekken." + (f" Beter: `{normal[0]}`; de LoRA werkt daarna ook "
+                        "op dit model." if normal else ""))
+    sizes = training.photo_sizes(paths, arch)
+    if kind in ("person", "character") and sizes["small"]:
+        warnings.append(f"⚠️ **{sizes['small']} van de {sizes['total']} foto's zijn klein** (korte kant onder "
+                        f"{int(s['resolution'] * 1.5)} px). Het gezicht wordt uitgesneden en vergroot, en dan leert het "
+                        f"model wazige ogen. Foto's van {sizes['advised']} px of groter werken veel beter; "
+                        "sterk vergrote uitsneden vallen automatisch af.")
+    text = "\n\n".join(warnings + [
         f"**Wat:** {training.KINDS[kind]} · **naam/trigger:** `{training.token_for(name)}`",
         f"**Basismodel:** {checkpoint} ({label}) · trainen op {s['resolution']}×{s['resolution']}",
         f"**Training:** {len(paths)} foto's → ± {s['steps']} stappen, rank {s['rank']} · **± {minutes} minuten**",

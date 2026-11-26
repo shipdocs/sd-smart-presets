@@ -74,8 +74,17 @@ def estimate_minutes(arch: str, steps: int) -> int:
     return max(1, round((steps * SECONDS_PER_STEP[arch] + samples * SECONDS_PER_SAMPLE[arch] + 90) / 60))
 
 
+DISTILLED = re.compile(r"hyper|lightning|turbo|lcm|dmd|flash|schnell", re.I)
+
+
+def is_distilled(checkpoint: str) -> bool:
+    """Few-step models (Hyper, Lightning, Turbo, LCM, DMD): fine for making images, poor to train on."""
+    return bool(DISTILLED.search(checkpoint or ""))
+
+
 def training_checkpoints() -> list[str]:
-    """Checkpoints a LoRA can be trained on (SD 1.5 / SDXL), current one first."""
+    """Checkpoints a LoRA can be trained on (SD 1.5 / SDXL): normal models first, the current one
+    first among those; few-step (distilled) models last."""
     from modules import sd_models
     names = []
     for info in sd_models.checkpoints_list.values():
@@ -85,7 +94,23 @@ def training_checkpoints() -> list[str]:
     if cur and cur.name in names:
         names.remove(cur.name)
         names.insert(0, cur.name)
-    return names
+    return sorted(names, key=is_distilled)  # stable: keeps the order above within each group
+
+
+def photo_sizes(image_paths: list[str], arch: str) -> dict:
+    """How many photos are too small to give a sharp face at the training resolution.
+    Only reads the image headers."""
+    from PIL import Image
+    res = RESOLUTION[arch]
+    small = 0
+    for p in image_paths:
+        try:
+            with Image.open(p) as im:
+                if min(im.size) < res * 1.5:
+                    small += 1
+        except Exception:
+            pass
+    return {"small": small, "total": len(image_paths), "advised": int(res * 2)}
 
 
 # ------------------------------------------------------------------ jobs

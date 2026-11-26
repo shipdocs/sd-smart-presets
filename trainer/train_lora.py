@@ -79,7 +79,7 @@ def prepare() -> list[Path]:
     out_dir = JOB / "dataset"
     out_dir.mkdir(exist_ok=True)
     kind = CFG["kind"]
-    dropped = {"onscherp": 0, "dubbel": 0, "geen gezicht": 0, "ander gezicht": 0, "onleesbaar": 0}
+    dropped = {"onscherp": 0, "dubbel": 0, "geen gezicht": 0, "ander gezicht": 0, "onleesbaar": 0, "te klein": 0}
 
     items = []
     seen = []
@@ -137,24 +137,39 @@ def prepare() -> list[Path]:
                 female = sum(1 for g in genders if g == 0)
                 class_word = "man" if male > female * 2 else "woman" if female > male * 2 else "person"
 
-    paths = []
-    for n, it in enumerate(items):
+    # crop first, so we know how many real pixels each training image has
+    for it in items:
         img = it["img"]
         if "face" in it:
             x1, y1, x2, y2 = it["face"].bbox
             side = max(x2 - x1, y2 - y1) * 2.8  # head and shoulders
-            crop = _square_crop(img, (x1 + x2) / 2, (y1 + y2) / 2 + (y2 - y1) * 0.35, side)
+            it["crop"] = _square_crop(img, (x1 + x2) / 2, (y1 + y2) / 2 + (y2 - y1) * 0.35, side)
         else:
             s = min(img.size)
-            crop = _square_crop(img, img.size[0] / 2, img.size[1] / 2, s)
-        crop = crop.resize((res, res), Image.LANCZOS)
+            it["crop"] = _square_crop(img, img.size[0] / 2, img.size[1] / 2, s)
+        it["px"] = min(it["crop"].size)
+
+    # A crop blown up more than 2x is blurry, and the model learns that blur (eyes and teeth
+    # go first). Drop those, but only while enough photos remain; keep the sharpest-sized ones.
+    min_keep = max(CFG.get("min_images", 5), 10)
+    small = sorted((it for it in items if it["px"] < res * 0.5), key=lambda it: it["px"])
+    for it in small:
+        if len(items) <= min_keep:
+            break
+        items.remove(it)
+        dropped["te klein"] += 1
+    upscaled = sum(1 for it in items if it["px"] < res * 0.8)
+
+    paths = []
+    for n, it in enumerate(items):
+        crop = it["crop"].resize((res, res), Image.LANCZOS)
         p = out_dir / f"{n:03d}.png"
         crop.save(p)
         paths.append(p)
 
     caption = f"{CFG['token']} style" if kind == "style" else f"photo of {CFG['token']} {class_word}".strip()
     summary = {"used": len(paths), "dropped": {k: v for k, v in dropped.items() if v}, "class_word": class_word,
-               "caption": caption}
+               "caption": caption, "upscaled": upscaled}
     status("prepare", 1.0, f"{len(paths)} foto's bruikbaar", log=f"dataset: {summary}", dataset=summary)
     if len(paths) < CFG.get("min_images", 5):
         raise RuntimeError(f"Te weinig bruikbare foto's ({len(paths)}); er zijn er minstens {CFG.get('min_images', 5)} nodig. "

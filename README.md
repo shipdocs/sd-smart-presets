@@ -40,14 +40,18 @@ always come from the built-in catalog, never from the preset file itself.
 
 ## Wizard 2: train a LoRA (tab "Leer iets nieuws")
 
-Drop 10 to 40 photos and give it a name. Everything else is automatic:
+Drop 10 to 40 photos (or pick a folder) and give it a name. Everything else is automatic:
 
 1. **Guess what it is.** If most photos have a face, it's a person; otherwise you choose
    between object, character and style. For a real person you must confirm they gave consent.
 2. **Check the photos.** Blurry photos and duplicates are dropped. For a person, photos of
    someone else are dropped too: the face most photos share wins (InsightFace embeddings).
    Gender is detected to pick the class word (`man` / `woman`). Then each photo is cropped
-   to head and shoulders and made square.
+   to head and shoulders and made square. Crops that would have to be blown up more than 2x
+   are dropped while at least 10 photos remain, because the model learns the blur (eyes go first).
+   The plan warns when photos are small (short side under 768 px for SD 1.5) and when the base
+   model is a few-step model (Hyper, Lightning, Turbo, LCM, DMD): those train poorly, so normal
+   checkpoints are listed first.
 3. **Train** a LoRA on the UNet attention layers (diffusers + peft, rank 16, 8-bit AdamW, min-SNR).
    The number of steps depends on the number of photos. Captions and latents are computed once,
    so only the UNet stays on the GPU: SD 1.5 fits easily in 12 GB, SDXL fits with gradient checkpointing.
